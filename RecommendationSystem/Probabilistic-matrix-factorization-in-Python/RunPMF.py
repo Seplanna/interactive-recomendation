@@ -34,6 +34,8 @@ def train_test_split(ratings):
     assert(np.all((train * test) == 0)) 
     return train, test
 
+#def train_test_split_by_user(ratings, users):
+
 def GetData1(directory):
     names = ['user_id', 'item_id', 'rating', 'timestamp']
     df = pd.read_csv(directory + "/" + 'u.data', sep='\t', names=names)
@@ -41,7 +43,7 @@ def GetData1(directory):
     n_items = df.item_id.unique().shape[0]
     ratings = np.zeros((n_users, n_items))
     for row in df.itertuples():
-        ratings[row[1]-1, row[2]-1] = row[3]
+        ratings[row[1]-1, row[2]-1] = (int(row[3] > 3.5) - 0.5) * 2
     print str(n_users) + ' users'
     print str(n_items) + ' items'
     sparsity = float(len(ratings.nonzero()[0]))
@@ -96,6 +98,8 @@ def OptimizeParametersSGD(train, test):
     print pd.Series(best_params)
 
 def Print_result(model, ratings):
+    error = 0
+    n_ex = 0
     result = []
     for user in xrange(ratings.shape[0]):
         test_ratings = ratings[user, :].nonzero()[0]
@@ -104,20 +108,25 @@ def Print_result(model, ratings):
     result.sort(key = lambda x:x[1])
     with open('res.txt', 'w') as res:
         for r in result:
+            error += (r[1] - r[0])**2
+            n_ex += 1
             res.write(str(r[0]) + "\t" + str(r[1]) + '\n')
+    return error / n_ex
 
 def main():
     train, test = train_test_split(GetData1(sys.argv[1]))
     ratings = GetData1(sys.argv[1])
-    best_sgd_model = ExplicitMF(ratings, n_factors=80, learning='sgd', \
+    best_sgd_model = ExplicitMF(ratings, n_factors=10, learning='sgd', \
                             item_fact_reg=0.01, user_fact_reg=0.01, \
                             user_bias_reg=0.01, item_bias_reg=0.01)
     best_sgd_model.train(200, learning_rate=0.001)
-    np.savetxt(sys.argv[2], best_sgd_model.item_vecs)
-    np.savetxt(sys.argv[3], best_sgd_model.item_bias)
-    np.savetxt(sys.argv[4], best_sgd_model.user_vecs)
-    np.savetxt(sys.argv[5], best_sgd_model.user_bias)
-    with open(sys.argv[6], 'w') as global_bias:
+    print(Print_result(best_sgd_model, test))
+    dir = sys.argv[2]
+    np.savetxt(dir + "items.txt", best_sgd_model.item_vecs)
+    np.savetxt(dir + "items_bias.txt", best_sgd_model.item_bias)
+    np.savetxt(dir + "users.txt", best_sgd_model.user_vecs)
+    np.savetxt(dir + "user_bias.txt", best_sgd_model.user_bias)
+    with open(dir + "global_bias.txt", 'w') as global_bias:
         global_bias.write(str(best_sgd_model.global_bias))
 #    best_sgd_model.item_vecs = np.genfromtxt(sys.argv[2])
 #    best_sgd_model.item_bias = np.genfromtxt(sys.argv[3]) 
@@ -126,7 +135,7 @@ def main():
 #    with open(sys.argv[6], 'r') as global_bias:
 #        for line in global_bias:
 #            best_sgd_model.global_bias = float(line.strip())
-    Print_result(best_sgd_model, test)
+
 
 
 def GetItemsNames(file):

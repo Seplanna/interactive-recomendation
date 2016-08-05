@@ -1,124 +1,216 @@
 import numpy as np
-from numpy import linalg as LA
+from numpy.linalg import solve
+from sklearn.metrics import mean_squared_error
 
-class PMF:
-    def __init__(self, num_feat=10, epsilon=1, _lambda=0.1, momentum=0.8, maxepoch=20, num_batches=10, batch_size=1000):
-        self.num_feat = num_feat
-        self.epsilon = epsilon
-        self._lambda = _lambda
-        self.momentum = momentum
-        self.maxepoch = maxepoch
-        self.num_batches = num_batches
-        self.batch_size = batch_size
-        
-        self.w_C = None
-        self.w_I = None
+def get_mse(pred, actual):
+    # Ignore nonzero terms.
+    pred = pred[actual.nonzero()].flatten()
+    actual = actual[actual.nonzero()].flatten()
+    return mean_squared_error(pred, actual)
 
-        self.err_train = []
-        self.err_val = []
+class ExplicitMF():
+    def __init__(self, 
+                 ratings,
+                 n_factors=40,
+                 learning='sgd',
+                 item_fact_reg=0.0, 
+                 user_fact_reg=0.0,
+                 item_bias_reg=0.0,
+                 user_bias_reg=0.0,
+                 verbose=True):
+        """
+        Train a matrix factorization model to predict empty 
+        entries in a matrix. The terminology assumes a 
+        ratings matrix which is ~ user x item
         
-    def fit(self, train_vec, val_vec):   
-        # mean subtraction
-        self.mean_inv = np.mean(train_vec[:,2])
+        Params
+        ======
+        ratings : (ndarray)
+            User x Item matrix with corresponding ratings
         
-        pairs_tr = train_vec.shape[0]
-        pairs_va = val_vec.shape[0]
+        n_factors : (int)
+            Number of latent factors to use in matrix 
+            factorization model
+        learning : (str)
+            Method of optimization. Options include 
+            'sgd' or 'als'.
         
-        # 1-p-i, 2-m-c
-        num_inv = int(max(np.amax(train_vec[:,0]), np.amax(val_vec[:,0]))) + 1
-        num_com = int(max(np.amax(train_vec[:,1]), np.amax(val_vec[:,1]))) + 1
-
-        incremental = False
-        if ((not incremental) or (self.w_C is None)):
-            # initialize
-            self.epoch = 0
-            self.w_C = 0.1 * np.random.randn(num_com, self.num_feat)
-            self.w_I = 0.1 * np.random.randn(num_inv, self.num_feat)
+        item_fact_reg : (float)
+            Regularization term for item latent factors
+        
+        user_fact_reg : (float)
+            Regularization term for user latent factors
             
-            self.w_C_inc = np.zeros((num_com, self.num_feat))
-            self.w_I_inc = np.zeros((num_inv, self.num_feat))
+        item_bias_reg : (float)
+            Regularization term for item biases
         
+        user_bias_reg : (float)
+            Regularization term for user biases
         
-        while self.epoch < self.maxepoch:
-            self.epoch += 1
+        verbose : (bool)
+            Whether or not to printout training progress
+        """
+        
+        self.ratings = ratings
+        self.n_users, self.n_items = ratings.shape
+        self.n_factors = n_factors
+        self.item_fact_reg = item_fact_reg
+        self.user_fact_reg = user_fact_reg
+        self.item_bias_reg = item_bias_reg
+        self.user_bias_reg = user_bias_reg
+        self.learning = learning
+        if self.learning == 'sgd':
+            self.sample_row, self.sample_col = self.ratings.nonzero()
+            self.n_samples = len(self.sample_row)
+        self._v = verbose
 
-            # Shuffle training truples
-            shuffled_order = np.arange(train_vec.shape[0])
-            np.random.shuffle(shuffled_order)
+    def als_step(self,
+                 latent_vectors,
+                 fixed_vecs,
+                 ratings,
+                 _lambda,
+                 type='user'):
+        """
+        One of the two ALS steps. Solve for the latent vectors
+        specified by type.
+        """
+        if type == 'user':
+            # Precompute
+            YTY = fixed_vecs.T.dot(fixed_vecs)
+            lambdaI = np.eye(YTY.shape[0]) * _lambda
 
-            # Batch update
-            for batch in range(self.num_batches):
-                # print "epoch %d batch %d" % (self.epoch, batch+1)
-
-                batch_idx = np.mod(np.arange(self.batch_size * batch,
-                                             self.batch_size * (batch+1)),
-                                   shuffled_order.shape[0])
-
-                batch_invID = np.array(train_vec[shuffled_order[batch_idx], 0], dtype='int32')
-                batch_comID = np.array(train_vec[shuffled_order[batch_idx], 1], dtype='int32')
-
-                # Compute Objective Function
-                pred_out = np.sum(np.multiply(self.w_I[batch_invID,:], 
-                                                self.w_C[batch_comID,:]),
-                                axis=1) # mean_inv subtracted
-
-                rawErr = pred_out - train_vec[shuffled_order[batch_idx], 2] + self.mean_inv
-
-                # Compute gradients
-                Ix_C = 2 * np.multiply(rawErr[:, np.newaxis], self.w_I[batch_invID,:]) \
-                        + self._lambda * self.w_C[batch_comID,:]
-                Ix_I = 2 * np.multiply(rawErr[:, np.newaxis], self.w_C[batch_comID,:]) \
-                        + self._lambda * self.w_I[batch_invID,:]
+            for u in xrange(latent_vectors.shape[0]):
+                latent_vectors[u, :] = solve((YTY + lambdaI), 
+                                             ratings[u, :].dot(fixed_vecs))
+        elif type == 'item':
+            # Precompute
+            XTX = fixed_vecs.T.dot(fixed_vecs)
+            lambdaI = np.eye(XTX.shape[0]) * _lambda
             
-                dw_C = np.zeros((num_com, self.num_feat))
-                dw_I = np.zeros((num_inv, self.num_feat))
+            for i in xrange(latent_vectors.shape[0]):
+                latent_vectors[i, :] = solve((XTX + lambdaI), 
+                                             ratings[:, i].T.dot(fixed_vecs))
+        return latent_vectors
 
-                # loop to aggreate the gradients of the same element
-                for i in range(self.batch_size):
-                    dw_C[batch_comID[i],:] += Ix_C[i,:]
-                    dw_I[batch_invID[i],:] += Ix_I[i,:]
-
-
-                # Update with momentum
-                self.w_C_inc = self.momentum * self.w_C_inc + self.epsilon * dw_C / self.batch_size
-                self.w_I_inc = self.momentum * self.w_I_inc + self.epsilon * dw_I / self.batch_size
-
-
-                self.w_C = self.w_C - self.w_C_inc
-                self.w_I = self.w_I - self.w_I_inc
-
-                # Compute Objective Function after
-                if batch == self.num_batches - 1:
-                    pred_out = np.sum(np.multiply(self.w_I[np.array(train_vec[:,0], dtype='int32'),:],
-                                                    self.w_C[np.array(train_vec[:,1], dtype='int32'),:]),
-                                        axis=1) # mean_inv subtracted
-                    rawErr = pred_out - train_vec[:, 2] + self.mean_inv
-                    obj = LA.norm(rawErr) ** 2 \
-                            + 0.5*self._lambda*(LA.norm(self.w_I) ** 2 + LA.norm(self.w_C) ** 2)
-
-                    self.err_train.append(np.sqrt(obj/pairs_tr))
-
-                # Compute validation error
-                if batch == self.num_batches - 1:
-                    pred_out = np.sum(np.multiply(self.w_I[np.array(val_vec[:,0], dtype='int32'),:],
-                                                    self.w_C[np.array(val_vec[:,1], dtype='int32'),:]),
-                                        axis=1) # mean_inv subtracted
-                    rawErr = pred_out - val_vec[:, 2] + self.mean_inv
-                    self.err_val.append(LA.norm(rawErr)/np.sqrt(pairs_va))
-
-                # Print info
-                #if batch == self.num_batches - 1:
-                #    print 'Training RMSE: %f, Test RMSE %f' % (self.err_train[-1], self.err_val[-1])
-
-    def predict(self, invID): 
-        return np.dot(self.w_C, self.w_I[invID,:]) + self.mean_inv
+    def train(self, n_iter=10, learning_rate=0.1):
+        """ Train model for n_iter iterations from scratch."""
+        # initialize latent vectors        
+        self.user_vecs = np.random.normal(scale=1./self.n_factors,\
+                                          size=(self.n_users, self.n_factors))
+        self.item_vecs = np.random.normal(scale=1./self.n_factors,
+                                          size=(self.n_items, self.n_factors))
         
-    def set_params(self, parameters):
-        if isinstance(parameters, dict):
-            self.num_feat = parameters.get("num_feat", 10)
-            self.epsilon = parameters.get("epsilon", 1)
-            self._lambda = parameters.get("_lambda", 0.1)
-            self.momentum = parameters.get("momentum", 0.8)
-            self.maxepoch = parameters.get("maxepoch", 20)
-            self.num_batches = parameters.get("num_batches", 10)
-            self.batch_size = parameters.get("batch_size", 1000)
+        if self.learning == 'als':
+            self.partial_train(n_iter)
+        elif self.learning == 'sgd':
+            self.learning_rate = learning_rate
+            self.user_bias = np.zeros(self.n_users)
+            self.item_bias = np.zeros(self.n_items)
+            self.global_bias = np.mean(self.ratings[np.where(self.ratings != 0)])
+            self.partial_train(n_iter)
+    
+    
+    def partial_train(self, n_iter):
+        """ 
+        Train model for n_iter iterations. Can be 
+        called multiple times for further training.
+        """
+        ctr = 1
+        while ctr <= n_iter:
+            if ctr % 10 == 0 and self._v:
+                print '\tcurrent iteration: {}'.format(ctr)
+            if self.learning == 'als':
+                self.user_vecs = self.als_step(self.user_vecs, 
+                                               self.item_vecs, 
+                                               self.ratings, 
+                                               self.user_fact_reg, 
+                                               type='user')
+                self.item_vecs = self.als_step(self.item_vecs, 
+                                               self.user_vecs, 
+                                               self.ratings, 
+                                               self.item_fact_reg, 
+                                               type='item')
+            elif self.learning == 'sgd':
+                self.training_indices = np.arange(self.n_samples)
+                np.random.shuffle(self.training_indices)
+                self.sgd()
+            ctr += 1
+
+    def sgd(self):
+        for idx in self.training_indices:
+            u = self.sample_row[idx]
+            i = self.sample_col[idx]
+            prediction = self.predict(u, i)
+            e = (self.ratings[u,i] - prediction) # error
+            
+            # Update biases
+            self.user_bias[u] += self.learning_rate * \
+                                (e - self.user_bias_reg * self.user_bias[u])
+            self.item_bias[i] += self.learning_rate * \
+                                (e - self.item_bias_reg * self.item_bias[i])
+            
+            #Update latent factors
+            self.user_vecs[u, :] += self.learning_rate * \
+                                    (e * self.item_vecs[i, :] - \
+                                     self.user_fact_reg * self.user_vecs[u,:])
+            self.item_vecs[i, :] += self.learning_rate * \
+                                    (e * self.user_vecs[u, :] - \
+                                     self.item_fact_reg * self.item_vecs[i,:])
+    def predict(self, u, i):
+        """ Single user and item prediction."""
+        if self.learning == 'als':
+            return self.user_vecs[u, :].dot(self.item_vecs[i, :].T)
+        elif self.learning == 'sgd':
+            prediction = self.global_bias + self.user_bias[u] + self.item_bias[i]
+            prediction += self.user_vecs[u, :].dot(self.item_vecs[i, :].T)
+            return prediction
+    
+    def predict_all(self):
+        """ Predict ratings for every user and item."""
+        predictions = np.zeros((self.user_vecs.shape[0], 
+                                self.item_vecs.shape[0]))
+        for u in xrange(self.user_vecs.shape[0]):
+            for i in xrange(self.item_vecs.shape[0]):
+                predictions[u, i] = self.predict(u, i)
+                
+        return predictions
+    
+    def calculate_learning_curve(self, iter_array, test, learning_rate=0.1):
+        """
+        Keep track of MSE as a function of training iterations.
+        
+        Params
+        ======
+        iter_array : (list)
+            List of numbers of iterations to train for each step of 
+            the learning curve. e.g. [1, 5, 10, 20]
+        test : (2D ndarray)
+            Testing dataset (assumed to be user x item).
+        
+        The function creates two new class attributes:
+        
+        train_mse : (list)
+            Training data MSE values for each value of iter_array
+        test_mse : (list)
+            Test data MSE values for each value of iter_array
+        """
+        iter_array.sort()
+        self.train_mse =[]
+        self.test_mse = []
+        iter_diff = 0
+        for (i, n_iter) in enumerate(iter_array):
+            if self._v:
+                print 'Iteration: {}'.format(n_iter)
+            if i == 0:
+                self.train(n_iter - iter_diff, learning_rate)
+            else:
+                self.partial_train(n_iter - iter_diff)
+
+            predictions = self.predict_all()
+
+            self.train_mse += [get_mse(predictions, self.ratings)]
+            self.test_mse += [get_mse(predictions, test)]
+            if self._v:
+                print 'Train mse: ' + str(self.train_mse[-1])
+                print 'Test mse: ' + str(self.test_mse[-1])
+            iter_diff = n_iter
