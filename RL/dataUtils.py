@@ -37,7 +37,7 @@ def GetData(datadir):
     item_vecs = np.genfromtxt(datadir + "/items.txt")
     item_bias = np.genfromtxt(datadir + "/items_bias.txt")
     user_vecs = np.genfromtxt(datadir + "/users.txt")
-    user_bias = np.genfromtxt(datadir + "/users_bias.txt")
+    user_bias = np.genfromtxt(datadir + "/user_bias.txt")
     global_bias = 0.
     with open(datadir + "/global_bias.txt", 'r') as global_b:
         for line in global_b:

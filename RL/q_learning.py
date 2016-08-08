@@ -49,7 +49,7 @@ def Learn():
     users_used_items = [set() for i in range(n_users)]
 
     i1 = 0
-    while i1 < 40:
+    while i1 < 4:
         f_w(1.)
         print (W1.get_value())
         print(classifier.log_regression.W.get_value())

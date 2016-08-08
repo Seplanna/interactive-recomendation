@@ -102,7 +102,7 @@ def GreedyApproach():
             result_file.write('\t'.join(str(a) for a in answers))
             result_file.write('\n')
 
-def OurApproachOneUser(user, user_bias, item_vecs, item_bias, global_bias, W, n_q, item_names,
+def OurApproachOneUser(user, user_bias, item_vecs, item_bias, global_bias, W, n_q,
                        user_estim, user_bias_estim):
     item = 0
     user_used_items = []
@@ -134,7 +134,7 @@ def OurApproachOneUser(user, user_bias, item_vecs, item_bias, global_bias, W, n_
     return answers
 
 def OurApproach(W, file):
-    items_names = GetItemsNames("data/u.item")
+    #items_names = GetItemsNames("data/u.item")
     item_vecs, item_bias, user_vecs, user_bias, global_bias = GetData("data")
     user_estimation = np.zeros((user_vecs.shape[0], user_vecs.shape[1]))
     user_bias_estim = np.zeros(user_vecs.shape[0])
@@ -148,7 +148,7 @@ def OurApproach(W, file):
                 break
             if(u % 2 == 0):
                 print(u)
-            answers = OurApproachOneUser(user_vecs[u], user_bias[u], item_vecs, item_bias, global_bias, W, 20, items_names,
+            answers = OurApproachOneUser(user_vecs[u], user_bias[u], item_vecs, item_bias, global_bias, W, 20,
                                          user_estimation[u], user_bias_estim[u])
             result_file.write('\t'.join(str(a) for a in answers))
             result_file.write('\n')
