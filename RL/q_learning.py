@@ -60,18 +60,21 @@ def Learn():
                 print(classifier.log_regression.W.get_value())
                 print("learning rate ", f(1))
                 np.savetxt("parameters4", classifier.log_regression.W.get_value(borrow=True))
+            users_used_items[i] = set()
+            env.user_vecs_estim[i] = np.zeros(env.latent_dim)
+            env.user_bias_estim[i] = 0
+            for i3 in range(i1 + 1):
+                user = np.append(env.user_vecs_estim[i], env.user_bias_estim[i])
+                max_q, best_item, item = classifier.recieve_e_greedy_action(env.actions, user, i2 / batch_size, users_used_items[i])
+                reward = env.reward(i, item)
+                if (reward > SUCSESS()):
+                    users_used_items[i].add(item)
 
-            user = np.append(env.user_vecs_estim[i], env.user_bias_estim[i])
-            max_q, best_item, item = classifier.recieve_e_greedy_action(env.actions, user, i2 / batch_size, users_used_items[i])
-            reward = env.reward(i, item)
-            if (reward > SUCSESS()):
-                users_used_items[i].add(item)
-
-            env.update_state(i, item)
-            new_user = np.append(env.user_vecs_estim[i], env.user_bias_estim[i])
-            new_max_q, new_best_item, new_item = \
-                classifier.recieve_new_greedy_action(env.actions, new_user, users_used_items[i])
-            pred, new_prediction, err = train(user, best_item,
+                env.update_state(i, item)
+                new_user = np.append(env.user_vecs_estim[i], env.user_bias_estim[i])
+                new_max_q, new_best_item, new_item = \
+                    classifier.recieve_new_greedy_action(env.actions, new_user, users_used_items[i])
+                pred, new_prediction, err = train(user, best_item,
                                               new_user, new_best_item,
                                               reward)
             if (i2 % batch_size == 0):

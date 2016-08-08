@@ -39,8 +39,8 @@ def Results(file, dim):
     line_n = 0
     with open(file) as r:
         for line in r:
-            if (line_n == 100):
-               break
+            #if (line_n == 100):
+            #   break
             #if (line_n < 100):
             #    line_n += 1
             #    continue

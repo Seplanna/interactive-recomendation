@@ -11,6 +11,7 @@ def First_approximation(latent_dim):
     W[latent_dim] = 1.
     for i in range(latent_dim):
         W[-i - 1] = 1.
+    W *= 10e-2
     return W
 
 class LogisticRegression(object):

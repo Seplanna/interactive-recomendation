@@ -144,8 +144,8 @@ def OurApproach(W, file):
     users_answers = []
     with open(file, 'w') as result_file:
         for u in range(n_users):
-            if (u == 100):
-                break
+            #if (u == 100):
+            #    break
             if(u % 2 == 0):
                 print(u)
             answers = OurApproachOneUser(user_vecs[u], user_bias[u], item_vecs, item_bias, global_bias, W, 20,
