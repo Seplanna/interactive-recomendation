@@ -6,8 +6,11 @@ import requests
 import json
 import math
 import os.path
-from dataUtils import *
-
+from multiprocessing import Process
+from multiprocessing import Pool
+from Einviirenment import *
+from logistic_regression import*
+import matplotlib.pyplot as plt
 
 headers = {'Accept': 'application/json'}
 payload = {'api_key': "e16fe7a4d1f7e73c8d9a611656c980c8"}
@@ -66,92 +69,54 @@ def get_poster(imdb_url, base_url, api_key = "e16fe7a4d1f7e73c8d9a611656c980c8")
     #display(Image(poster))
     return poster
 
-def GreedyForOneUser(user, user_bias, item_vecs, item_bias, global_bias, n_q):
-    user_estim = np.zeros(item_vecs.shape[1])
-    user_bias_estim = 0
+def OurApproachOneUser(classifier, env, user_n, n_q, distanse_to_real):
     answers = []
-    first_item = 1448
-    user_used_items = []
-    s = recieveAnswer(user, user_bias, item_vecs[first_item], item_bias[first_item], global_bias, 0.01)
-    answers.append(int(s>SUCSESS))
-    item = first_item
+    users_used_items = set()
     for i in range(n_q):
-        learning_rate = 1. / math.sqrt(i + 1.)
-        OneStep(user_estim, user_bias_estim, item_vecs[item], item_bias[item],
-                global_bias, float(s), learning_rate,
-                learning_rate, learning_rate)
-        element = -1000
-        for item1 in range(0, item_vecs.shape[0]):
-            c = np.dot(user_estim, item_vecs[item1]) + item_bias[item1] + user_bias_estim
-            if (element < c and not (item1 in user_used_items)):
-                element = c
-                item = item1
-        user_used_items.append(item)
-        s = recieveAnswer(user, user_bias, item_vecs[item], item_bias[item], global_bias, 0.01)
-        answers.append(int( s > SUCSESS))
+        user = np.append(env.user_vecs_estim[user_n], env.user_bias_estim[user_n])
+        max_q, best_item, item = classifier.recieve_new_greedy_action(env.actions, user, users_used_items)
+        reward = env.reward(user_n, item)
+        users_used_items.add(item)
+        answers.append(reward)
+        env.update_state(user_n, item)
+        d = env.user_vecs_estim[user_n] - env.user_vecs[user_n]
+        d = np.dot(d, d.T)
+        distanse_to_real[i] += d
+    #print(answers)
     return answers
 
-def GreedyApproach():
-    items_names= GetItemsNames("data/u.item")
-    item_vecs, item_bias, user_vecs, user_bias, global_bias = GetData("data")
-    n_users = user_vecs.shape[0]
-    users_answers = []
-    with open("GreedyPlay", 'w') as result_file:
-        for u in range(n_users):
-            answers = GreedyForOneUser(user_vecs[u], user_bias[u], item_vecs, item_bias, global_bias, 30)
-            result_file.write('\t'.join(str(a) for a in answers))
-            result_file.write('\n')
-
-def OurApproachOneUser(user, user_bias, item_vecs, item_bias, global_bias, W, n_q,
-                       user_estim, user_bias_estim):
-    item = 0
-    user_used_items = []
-    answers = []
-
-    for i in range(n_q):
-        element = -1000
-        learning_rate = 0.001
-        #learning_rate = 1. / math.sqrt(i + 1.)
-        for item1 in range(0, item_vecs.shape[0]):
-            c = np.dot(W, make_input(item_vecs[item1], item_bias[item1],
-                                 user_estim, user_bias_estim))
-            if ((element < c or element == -1000) and not (item1 in user_used_items)):
-                element = c
-                item = item1
-        #get_poster(item_names[item+1][1], base_url)
-        #print(item_names[item+1][0])
-        user_used_items.append(item)
-        s = recieveAnswer(user, user_bias, item_vecs[item], item_bias[item], global_bias, 0.5)
-        answers.append(int(s > SUCSESS()))
-        sucsess = -1
-        if (s > SUCSESS()):
-            sucsess = 1
-        OneStep(user_estim, user_bias_estim, item_vecs[item], item_bias[item],
-                global_bias, sucsess, learning_rate,
-                learning_rate, learning_rate)
-        #print(np.dot((user_estim - user), (user_estim - user).T))
-    print(answers)
-    return answers
-
-def OurApproach(W, file):
+def OurApproach(args):
     #items_names = GetItemsNames("data/u.item")
-    item_vecs, item_bias, user_vecs, user_bias, global_bias = GetData("data")
-    user_estimation = np.zeros((user_vecs.shape[0], user_vecs.shape[1]))
-    user_bias_estim = np.zeros(user_vecs.shape[0])
     #item_vecs, item_bias, user_estimation, user_bias_estim, global_bias1 = GetData("data1")
+    W = args[0]
+    file = args[1]
+    n_thread = args[2]
+    n_threads = args[3]
 
-    n_users = user_vecs.shape[0]
-    users_answers = []
+    n_q = 40
+    dis_to_real = [0 for i in range(n_q)]
+    expand = 1
+    learning_rate = 0.001
+    n_users = 40000
+    sigma = 0.5
+    env = Envierment(expand, n_users, sigma, learning_rate)
+    classifier = Qlearning(first_W=W)
+    first_user = (env.n_users / n_threads) * n_thread
     with open(file, 'w') as result_file:
-        for u in range(n_users):
+        for u in range(first_user, first_user + env.n_users / n_threads):
             #if (u == 100):
             #    break
             if(u % 2 == 0):
                 print(u)
-            answers = OurApproachOneUser(user_vecs[u], user_bias[u], item_vecs, item_bias, global_bias, W, 20,
-                                         user_estimation[u], user_bias_estim[u])
+            answers = OurApproachOneUser(classifier, env, u, n_q, dis_to_real)
+            if -1 in answers:
+                print(answers)
+            #print(dis_to_real)
             result_file.write('\t'.join(str(a) for a in answers))
             result_file.write('\n')
+    a = range(n_q)
+    plt.plot(a, np.array(dis_to_real) / n_users, 'r')
+    plt.show()
 
 def Play():
     W = np.genfromtxt("parameters")
@@ -196,11 +161,27 @@ def Play():
 if __name__ == '__main__':
     #GreedyApproach()
     #Play()
-    W = np.genfromtxt("parameters4")
+    W = np.genfromtxt("parameters")
     latent_dim = 10
     W1 = np.zeros(W.shape[0])
     W1[latent_dim] = 1.
     for i in range(latent_dim):
         W1[-i - 1] = 1.
-    OurApproach(W1, "GreedyPlay")
-    OurApproach(W, "OurApproach3")
+
+    n_th = 4
+    args_g = []
+    for i in range(n_th):
+        args_g.append([W1, "GreedyPlay" + "_" + str(i), i, n_th])
+    #OurApproach(W1, "GreedyPlay")
+    args = []
+    for i in range(n_th):
+        args.append([W, "OurApproach3" + "_" + str(i), i, n_th])
+
+    #p = Pool(processes=n_th)
+    #print(args)
+    #p.map(OurApproach, args)
+    #p1 = Pool(processes=n_th)
+    #p1.map(OurApproach, args_g)
+
+    OurApproach([W1, "GreedyPlay", 0, 1])
+    #OurApproach([W, "OurApproach3", 0, 1])
