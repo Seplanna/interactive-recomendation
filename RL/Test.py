@@ -12,8 +12,8 @@ from Einviirenment import *
 from logistic_regression import*
 import matplotlib.pyplot as plt
 
-headers = {'Accept': 'application/json'}
-payload = {'api_key': "e16fe7a4d1f7e73c8d9a611656c980c8"}
+#headers = {'Accept': 'application/json'}
+#payload = {'api_key': "e16fe7a4d1f7e73c8d9a611656c980c8"}
 #response1 = requests.get("http://api.themoviedb.org/3/configuration", \
 #                       params=payload, \
 #                       headers=headers)
@@ -69,12 +69,17 @@ def get_poster(imdb_url, base_url, api_key = "e16fe7a4d1f7e73c8d9a611656c980c8")
     #display(Image(poster))
     return poster
 
-def OurApproachOneUser(classifier, env, user_n, n_q, distanse_to_real):
+def OurApproachOneUser(classifier, env, user_n, n_q, distanse_to_real, states_item_policy):
     answers = []
     users_used_items = set()
     for i in range(n_q):
         user = np.append(env.user_vecs_estim[user_n], env.user_bias_estim[user_n])
-        max_q, best_item, item = classifier.recieve_new_greedy_action(env.actions, user, users_used_items)
+        user_str = VectorToString(user)
+        if user_str in states_item_policy and i < 50:
+           item = states_item_policy[user_str]
+        else:
+            max_q, best_item, item = classifier.recieve_new_greedy_action(env.actions, user, users_used_items)
+            states_item_policy[user_str] = item
         reward = env.reward(user_n, item)
         users_used_items.add(item)
         answers.append(reward)
@@ -96,30 +101,35 @@ def OurApproach(args):
     n_q = 40
     dis_to_real = [0 for i in range(n_q)]
     expand = 1
-    learning_rate = 0.001
-    n_users = 40000
+    learning_rate = 0.01
+    n_users = 100
     sigma = 0.5
     env = Envierment(expand, n_users, sigma, learning_rate)
     classifier = Qlearning(first_W=W)
     first_user = (env.n_users / n_threads) * n_thread
+    states_item_policy = {}
     with open(file, 'w') as result_file:
         for u in range(first_user, first_user + env.n_users / n_threads):
             #if (u == 100):
             #    break
             if(u % 2 == 0):
                 print(u)
-            answers = OurApproachOneUser(classifier, env, u, n_q, dis_to_real)
+            answers = OurApproachOneUser(classifier, env, u, n_q, dis_to_real, states_item_policy)
             if -1 in answers:
                 print(answers)
             #print(dis_to_real)
             result_file.write('\t'.join(str(a) for a in answers))
             result_file.write('\n')
     a = range(n_q)
-    plt.plot(a, np.array(dis_to_real) / n_users, 'r')
+    plt.plot(a, np.array(dis_to_real) / env.n_users, 'r')
     plt.show()
 
 def Play():
     W = np.genfromtxt("parameters")
+    W1 = np.zeros(W.shape[0])
+    W1[latent_dim] = 1.
+    for i in range(latent_dim):
+        W1[-i - 1] = 1.
     items_names= GetItemsNames("data/u.item")
     item_vecs, item_bias, user_vecs, user_bias, global_bias = GetData("data")
 
@@ -136,24 +146,15 @@ def Play():
     s1 = '0'
     n_q = 0
     while not s1 == 'finish':
-        element = -1000
-        learning_rate = 1./math.sqrt(n_q + 1.)
-        #print ('user estimation = ', user_estimation)
-        for item1 in range(0, item_vecs.shape[0]):
-            c = np.dot(W, make_input(item_vecs[item1], item_bias[item1],
-                                                        user_estimation, user_bias_estim))
-            if (element < c and not (item1 in users_used_items)):
-                element = c
-                y1_arg = item1
-            item = items_names[y1_arg + 1]
+        user = np.append(env.user_vecs_estim[0], env.user_bias_estim[0])
+        max_q, best_item, item = classifier.recieve_new_greedy_action(env.actions, user, users_used_items)
+        reward = raw_input("how do you like item " + str(y1_arg) + "\n")
+        users_used_items.add(item)
+        env.update_state(0, item)
 
         get_poster(item[1], base_url)
         print("user estimation ", user_estimation)
         print(item[0], element, np.dot(user_estimation, item_vecs[y1_arg]), user_bias_estim, item_bias[y1_arg])
-        s = raw_input("how do you like item " + str(y1_arg) + "\n")
-        OneStep(user_estimation, user_bias_estim, item_vecs[y1_arg], item_bias[y1_arg],
-                global_bias, float(s), learning_rate,
-                learning_rate, learning_rate)
         users_used_items.add(y1_arg)
         print(users_used_items)
         n_q += 1
@@ -161,7 +162,7 @@ def Play():
 if __name__ == '__main__':
     #GreedyApproach()
     #Play()
-    W = np.genfromtxt("parameters")
+    W = np.genfromtxt("parameters4")
     latent_dim = 10
     W1 = np.zeros(W.shape[0])
     W1[latent_dim] = 1.
@@ -183,5 +184,5 @@ if __name__ == '__main__':
     #p1 = Pool(processes=n_th)
     #p1.map(OurApproach, args_g)
 
-    OurApproach([W1, "GreedyPlay", 0, 1])
+    OurApproach([W1, "GreedyPlay_0", 0, 1])
     #OurApproach([W, "OurApproach3", 0, 1])

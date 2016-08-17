@@ -2,9 +2,9 @@ import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+#import seaborn as sns
 from PMF import *
-sns.set()
+#sns.set()
 np.random.seed(0)
 
 
@@ -98,7 +98,8 @@ def OptimizeParametersSGD(train, test):
     print pd.Series(best_params)
 
 def Print_result(model, ratings):
-    error = 0
+    error = 0.
+    mse = 0
     n_ex = 0
     result = []
     for user in xrange(ratings.shape[0]):
@@ -108,26 +109,29 @@ def Print_result(model, ratings):
     result.sort(key = lambda x:x[1])
     with open('res.txt', 'w') as res:
         for r in result:
-            error += (r[1] - r[0])**2
+            mse += (r[1] - r[0]) ** 2
+            error += int((r[1] * r[0]) > 0)
             n_ex += 1
             res.write(str(r[0]) + "\t" + str(r[1]) + '\n')
-    return error / n_ex
+    return error / n_ex, mse / n_ex
 
 def main():
-    train, test = train_test_split(GetData1(sys.argv[1]))
-    ratings = GetData1(sys.argv[1])
+    dir_with_data = "../../movieLens/ml-100k"
+    train, test = train_test_split(GetData1(dir_with_data))
+    ratings = GetData1(dir_with_data)
     best_sgd_model = ExplicitMF(ratings, n_factors=10, learning='sgd', \
                             item_fact_reg=0.01, user_fact_reg=0.01, \
                             user_bias_reg=0.01, item_bias_reg=0.01)
-    best_sgd_model.train(200, learning_rate=0.001)
-    print(Print_result(best_sgd_model, test))
-    dir = sys.argv[2]
-    np.savetxt(dir + "items.txt", best_sgd_model.item_vecs)
-    np.savetxt(dir + "items_bias.txt", best_sgd_model.item_bias)
-    np.savetxt(dir + "users.txt", best_sgd_model.user_vecs)
-    np.savetxt(dir + "user_bias.txt", best_sgd_model.user_bias)
-    with open(dir + "global_bias.txt", 'w') as global_bias:
-        global_bias.write(str(best_sgd_model.global_bias))
+    for i in range(20):
+        best_sgd_model.train(300, learning_rate=0.01 / (i + 1), from_scratch=(i==0))
+        print(Print_result(best_sgd_model, test))
+        dir = "../../RL/data/"
+        np.savetxt(dir + "items.txt", best_sgd_model.item_vecs)
+        np.savetxt(dir + "items_bias.txt", best_sgd_model.item_bias)
+        np.savetxt(dir + "users.txt", best_sgd_model.user_vecs)
+        np.savetxt(dir + "user_bias.txt", best_sgd_model.user_bias)
+        with open(dir + "global_bias.txt", 'w') as global_bias:
+            global_bias.write(str(best_sgd_model.global_bias))
 #    best_sgd_model.item_vecs = np.genfromtxt(sys.argv[2])
 #    best_sgd_model.item_bias = np.genfromtxt(sys.argv[3]) 
 #    best_sgd_model.user_vecs = np.genfromtxt(sys.argv[4])

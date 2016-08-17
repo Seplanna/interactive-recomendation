@@ -7,11 +7,11 @@ from random import randint
 import math
 
 def First_approximation(latent_dim):
-    W = np.zeros(3 * latent_dim + 2)
+    W = np.zeros(4 * latent_dim + 3)
     W[latent_dim] = 1.
     for i in range(latent_dim):
         W[-i - 1] = 1.
-    W *= 10e-2
+    #W *= 10e-2
     return W
 
 class LogisticRegression(object):
@@ -36,11 +36,13 @@ class Qlearning(object):
         self.log_regression = LogisticRegression(first_W)
         st = T.dvector('st')
         ac = T.dvector('ac')
+        z = ac*ac
         self.q_ = th.function(inputs=[st, ac],
-                              outputs=[self.log_regression.cost(T.concatenate([ac, st, ac[:-1] * st[:-1]]))])
+                              outputs=[self.log_regression.cost(T.concatenate([ac, z, st, ac[:-1] * st[:-1]]))])
 
     def q(self, state, action):
-        return self.log_regression.cost(T.concatenate([action, state, action[:-1] * state[:-1]]))
+        a = action * action
+        return self.log_regression.cost(T.concatenate([a, action, state, action[:-1] * state[:-1]]))
 
     def recieve_new_greedy_action(self, actions, state, users_used_items):
         max_q = self.q_(state, actions[0])

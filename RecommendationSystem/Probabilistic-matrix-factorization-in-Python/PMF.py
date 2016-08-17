@@ -92,12 +92,13 @@ class ExplicitMF():
                                              ratings[:, i].T.dot(fixed_vecs))
         return latent_vectors
 
-    def train(self, n_iter=10, learning_rate=0.1):
+    def train(self, n_iter=10, learning_rate=0.1, from_scratch = True):
         """ Train model for n_iter iterations from scratch."""
-        # initialize latent vectors        
-        self.user_vecs = np.random.normal(scale=1./self.n_factors,\
+        # initialize latent vectors
+        if (from_scratch):
+            self.user_vecs = np.random.normal(scale=1./self.n_factors,\
                                           size=(self.n_users, self.n_factors))
-        self.item_vecs = np.random.normal(scale=1./self.n_factors,
+            self.item_vecs = np.random.normal(scale=1./self.n_factors,
                                           size=(self.n_items, self.n_factors))
         
         if self.learning == 'als':
