@@ -3,7 +3,7 @@ import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 
-def ResultsForOneUserEasy(user_res, utility, n_exp):
+def ResultsForOneUserEasy(user_res, utility, n_exp, result):
     length = 0
     u = 0
     n_ex = 0
@@ -11,12 +11,15 @@ def ResultsForOneUserEasy(user_res, utility, n_exp):
         if (i <= 0):
             length += 1
         else:
+            m = min(len(result) - 1, length)
+            result[m] += 1
             u += (0.5)**length
             n_ex += 1
             length = 0
     #if (length > 0):
     #    n_exp += 1
-    return utility + u/max(n_ex, 1), n_exp+1
+#    print(result)
+    return utility + u/max(n_ex, 1), n_exp+1, result
 
 def ResultsForOneUser(user_res, results, results_for_one_dim):
     n_zeros = 0
@@ -40,6 +43,7 @@ def ResultsForOneUser(user_res, results, results_for_one_dim):
 def Results(file, dim, start):
     utility = 0
     n_exp = 0
+    mist = [0 for i in range(50)]
     results = [0 for i in range(dim+1)]
     results_for_dim = [0 for i in range(dim)]
     line_n = 0
@@ -52,26 +56,27 @@ def Results(file, dim, start):
             #    continue
             line = line.strip().split()
             ResultsForOneUser([float(i) for i in line[start:]], results, results_for_dim)
-            utility, n_exp = ResultsForOneUserEasy([float(i) for i in line[start:]], utility, n_exp)
+            utility, n_exp, mist = ResultsForOneUserEasy([float(i) for i in line[start:]], utility, n_exp, mist)
             line_n += 1
-    print(results, results_for_dim, utility / n_exp, n_exp)
+    print(results[-1], results_for_dim[-1], utility / n_exp, n_exp)
     return [results, results_for_dim, utility / n_exp]
 
 if __name__ == '__main__':
 
-    n_q = 20
+    n_q = 150
     n_st = -1
-    for j in range(1):
+    for j in range(6, 7, 2):
         result_greedy = []
         utility_greedy = []
         result_our = []
         utility_our = []
         for i in range(0,n_q):
-            print(i)
-            #r_g, r_d_g, u_g = Results('GreedyPLay_0', 20, i)
-            print(j)
-            r_g, r_d_g, u_g = Results('results/' + str(j) +  '.txt', 20, i)
-            r_o, r_d_o, u_o = Results('results/' + str(j+20) +  '.txt', 20, i)
+            print(i, j)
+            r_g, r_d_g, u_g = Results('GreedyPLay_0', 50, i)
+            r_o, r_d_o, u_o = Results('OurApproach3', 50, i)
+            #print(j)
+            #r_g, r_d_g, u_g = Results('results/' + str(j) +  '.txt', 20, i)
+            #r_o, r_d_o, u_o = Results('results/' + str(j+2) +  '.txt', 20, i)
             result_greedy.append([r_g[n_st]])
             utility_greedy.append(u_g)
             result_our.append(r_o[n_st])

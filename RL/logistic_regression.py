@@ -27,7 +27,7 @@ class LogisticRegression(object):
     def cost(self, input):
         # s = T.sum(self.b) + T.dot(input, self.W)
         s = T.dot(input, self.W)
-        # return  1. / (1 + T.exp(-s))
+        #return  1. / (1 + T.exp(-s))
         return s
 
 class Qlearning(object):
