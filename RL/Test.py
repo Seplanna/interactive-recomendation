@@ -69,12 +69,17 @@ def get_poster(imdb_url, base_url, api_key = "e16fe7a4d1f7e73c8d9a611656c980c8")
     #display(Image(poster))
     return poster
 
-def OurApproachOneUser(classifier, env, user_n, n_q, distanse_to_real, states_item_policy):
+def OurApproachOneUser(classifiers, env, user_n, n_q, distanse_to_real, states_item_policy):
     answers = []
+    items = []
     users_used_items = set()
+    learning_rate = 0.1
     for i in range(n_q):
         user = np.append(env.user_vecs_estim[user_n], env.user_bias_estim[user_n])
         user_str = VectorToString(user)
+
+        c = min(len(classifiers) - 1, i)
+        classifier = classifiers[c]
         if user_str in states_item_policy and i < 50:
            item = states_item_policy[user_str]
         else:
@@ -83,38 +88,40 @@ def OurApproachOneUser(classifier, env, user_n, n_q, distanse_to_real, states_it
         reward = env.reward(user_n, item)
         users_used_items.add(item)
         answers.append(reward)
-        env.update_state(user_n, item)
+        items.append(item)
+        env.update_state(user_n, item, LearningRate(learning_rate, i+1))
         d = env.user_vecs_estim[user_n] - env.user_vecs[user_n]
         d = np.dot(d, d.T)
-        distanse_to_real[i] += d
+        distanse_to_real[i] += math.sqrt(d)
     #print(answers)
+    print(items)
     return answers
 
 def OurApproach(args):
     #items_names = GetItemsNames("data/u.item")
     #item_vecs, item_bias, user_estimation, user_bias_estim, global_bias1 = GetData("data1")
-    W = args[0]
+    classifiers = args[0]
     file = args[1]
     n_thread = args[2]
     n_threads = args[3]
 
-    n_q = 40
+    n_q = 200
     dis_to_real = [0 for i in range(n_q)]
     expand = 1
     learning_rate = 0.01
     n_users = 100
     sigma = 0.5
-    env = Envierment(expand, n_users, sigma, learning_rate)
-    classifier = Qlearning(first_W=W)
-    first_user = (env.n_users / n_threads) * n_thread
+    env = Envierment(expand, n_users + 100, sigma, learning_rate)
+    #classifier = Qlearning(first_W=W)
+    first_user = 100#(env.n_users / n_threads) * n_thread
     states_item_policy = {}
     with open(file, 'w') as result_file:
-        for u in range(first_user, first_user + env.n_users / n_threads):
+        for u in range(first_user, first_user + 100):#env.n_users / n_threads):
             #if (u == 100):
             #    break
             if(u % 2 == 0):
                 print(u)
-            answers = OurApproachOneUser(classifier, env, u, n_q, dis_to_real, states_item_policy)
+            answers = OurApproachOneUser(classifiers, env, u, n_q, dis_to_real, states_item_policy)
             if -1 in answers:
                 print(answers)
             #print(dis_to_real)
@@ -183,6 +190,13 @@ if __name__ == '__main__':
     #p.map(OurApproach, args)
     #p1 = Pool(processes=n_th)
     #p1.map(OurApproach, args_g)
+    greedy_classifier = Qlearning(first_W=W1)
 
-    OurApproach([W1, "GreedyPlay_0", 0, 1])
-    #OurApproach([W, "OurApproach3", 0, 1])
+    classifiers = []
+    n_classifiers = 10
+    classifiers = []
+    for i in range(n_classifiers):
+        classifiers.append(Qlearning(first_W = np.genfromtxt("parameters4_" + str(i))))
+    classifiers.append(greedy_classifier)
+    #OurApproach([[greedy_classifier], "GreedyPlay_0", 0, 1])
+    OurApproach([classifiers, "OurApproach3", 0, 1])
