@@ -73,7 +73,7 @@ def OurApproachOneUser(classifiers, env, user_n, n_q, distanse_to_real, states_i
     answers = []
     items = []
     users_used_items = set()
-    learning_rate = 0.1
+    learning_rate = 1.
     for i in range(n_q):
         user = np.append(env.user_vecs_estim[user_n], env.user_bias_estim[user_n])
         user_str = VectorToString(user)
@@ -197,6 +197,6 @@ if __name__ == '__main__':
     classifiers = []
     for i in range(n_classifiers):
         classifiers.append(Qlearning(first_W = np.genfromtxt("parameters4_" + str(i))))
-    classifiers.append(greedy_classifier)
+    #classifiers.append(greedy_classifier)
     #OurApproach([[greedy_classifier], "GreedyPlay_0", 0, 1])
-    OurApproach([classifiers, "OurApproach3", 0, 1])
+    OurApproach([classifiers, "OurApproach3_0", 0, 1])

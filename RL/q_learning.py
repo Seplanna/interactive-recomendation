@@ -86,11 +86,11 @@ def Learn():
 
     n_classifiers = 10
     expand = 4
-    learning_rate = 0.1
+    learning_rate = 1.
 
     learning_rate1s = []
     for i in range(n_classifiers):
-        learning_rate1s.append(th.shared(0.05))
+        learning_rate1s.append(th.shared(0.5))
 
     batch_size = 100
     n_users = 400
@@ -207,7 +207,7 @@ def Learn():
                 env.update_state(i, item, LearningRate(learning_rate, i3+1) )
                 new_user = np.append(env.user_vecs_estim[i], env.user_bias_estim[i])
                 new_dis = np.dot((new_user - user_real), (new_user - user_real).T)
-                rewards[i3] = 10 * (-new_dis + old_dis) + r
+                rewards[i3] = r
 
             new_user = np.append(env.user_vecs_estim[i], env.user_bias_estim[i])
             new_max_q, new_best_item, new_item = a.recieve_new_greedy_action(env.actions, user, users_used_items[i])
@@ -216,29 +216,39 @@ def Learn():
             l1 = 1
             for i3 in range(i1 +1):
                 cl =  i1 - i3  - 1
-                if (rewards[-i3-1] < -1000):
+                if (rewards[-i3-1] < 0):
                     #l *= 0.33
                     #r*= 0.33
-                    r -= 0
-                    if (l1 < l):
+                    l -= 1
+                    if (l1 > l):
                         l1 = l
                 else:
+                    l += 0.2
+                    if (l > 0):
+                        l = 0.
                     #l *= 0.95
                     #r = 0.5 + r * 0.95
-                    r += rewards[-i3-1]
+                    #r += rewards[-i3-1]
+                if l1 < -1:
+                    r = 0
+                else:
+                    r = 1
+                l2 = 1
+                if i3 > 10:
+                    l2 = 0
                 if cl >= n_classifiers:
                     continue
 
                 pred, new_prediction, err = trains[cl](train_parameters[-i3 - 1][0], train_parameters[-i3 - 1][1],
                                                        new_user, new_best_item,
-                                                       r, 1.)
+                                                       r * (1 - l2), r * l2)
 
             if (i2 % batch_size == 0):
                 print(i2)
                 items = [it[2] for it in train_parameters]
                 print("items", items)
                 print(rewards)
-                print("Pred, err, reward, after", pred, err, (float(r) / (2 * (i3 + 1))), new_prediction)
+                print("Pred, err, reward, after", pred, err, r, new_prediction)
         for i in range(n_classifiers):
             print("learning rate ", fs[i](1))
         i1 += 1
@@ -361,3 +371,4 @@ if __name__ == '__main__':
     #PrintItemPopularity(user_vecs, user_bias, item_vecs, item_bias, global_bias, 0)
     Learn()
     #Get_classifiers()
+    #DeleteItemsWithoutManyRatings(20)

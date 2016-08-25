@@ -141,12 +141,46 @@ def DeleteMostPopularItems(n_delete_items):
         for line in items:
             if n_line not in items_pop[:n_delete_items]:
                 n_items.write(line)
+            else:
+                n_items.write('\t'.join(['0' for i in range(10)]) + '\n')
             n_line += 1
         n_line = 0
         for line in i_b:
             if n_line not in items_pop[:n_delete_items]:
                 n_ib.write(line)
+            else:
+                n_ib.write('0' + '\n')
             n_line += 1
+
+def GetNRatingsOfItems():
+    result = {}
+    with open('data/items_ratings.txt') as f:
+        for line in f:
+            line = line.strip().split()
+            result[int(line[0])] = int(line[1])
+    return result
+
+def DeleteItemsWithoutManyRatings(threshold):
+    itemsRatings = GetNRatingsOfItems()
+    items = open("data/items.txt").readlines()
+    items1 = open("data/items1.txt", 'w')
+    items_b = open("data/items_bias.txt").readlines()
+    items_b1 = open("data/items_bias1.txt", 'w')
+    dictionaryToItems = {}
+    newline_n = 0
+    for line_n, line in enumerate(items):
+        if itemsRatings[line_n] > threshold:
+            dictionaryToItems[line_n] = newline_n
+            items1.write(line)
+            items_b1.write(items_b[line_n])
+            newline_n += 1
+    with open('itemPopularity') as iP, open('data/itemPopularity', 'w') as nIP:
+        for line in iP:
+            line = line.strip().split('\t')
+            if (itemsRatings[int(line[2])] > threshold):
+                line[2] = str(dictionaryToItems[int(line[2])])
+                nIP.write('\t'.join(line) + '\n')
+
 
 def VectorToString(vector):
     return "_".join(str(v) for v in vector)
